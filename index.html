@@ -9,47 +9,73 @@
 <body>
 <script>
 let mic, fft;
+let started = false;
 
 function setup() {
   createCanvas(500, 300);
-  colorMode(HSB, 360, 100, 100);  // 色を H（色相）S（彩度）B（明るさ）で指定
-
-  mic = new p5.AudioIn();
-  mic.start();        // マイクON
-
-  fft = new p5.FFT();
-  fft.setInput(mic);  // FFTにマイクをつなぐ
+  colorMode(HSB, 360, 100, 100);  // 色相・彩度・明るさ
 
   textSize(16);
+  textAlign(LEFT, TOP);
+}
+
+// ブラウザの仕様で、音関係は「クリックなどの操作」後じゃないと
+// ちゃんと動かないことが多いので、ここでスタートさせる
+function mousePressed() {
+  if (!started) {
+    started = true;
+
+    userStartAudio();         // AudioContext を開始
+
+    mic = new p5.AudioIn();
+    mic.start();              // マイクON
+
+    fft = new p5.FFT();
+    fft.setInput(mic);        // FFTにマイクをつなぐ
+  }
 }
 
 function draw() {
   background(0);
 
+  if (!started) {
+    fill(255);
+    text("画面を一度クリックしてから話しかけてね！", 20, 20);
+    return;
+  }
+
   // ① 音の大きさ（振幅）を取得
-  let vol = mic.getLevel();        // 0.0〜0.3くらい
-  let bright = map(vol, 0, 0.3, 10, 100, true);  // 明るさに変換
+  let vol = mic.getLevel();   // だいたい 0.0〜0.1 くらい
 
-  // ② 音の高さ（周波数）を取得
-  let centroid = fft.getCentroid();    // 中心周波数 [Hz]
+  // 変化が見えやすいように、少し大げさにマッピング
+  let bright = map(vol, 0, 0.1, 10, 100, true);
 
-  // 普通の声を想定して 100〜1000 Hz を赤〜紫に対応させる
-  // 0度 = 赤, 280度あたり = 紫
-  let hue = map(centroid, 100, 1000, 0, 280, true);
+  // ② 周波数スペクトルを計算
+  fft.analyze();              // ★これがないと centroid がうまく出ない
+  let centroid = fft.getCentroid();  // 推定の中心周波数 [Hz]
+
+  // 値が NaN や 0 に近いときは、適当な基準値(440Hz)にしておく
+  if (!isFinite(centroid) || centroid < 50) {
+    centroid = 440;
+  }
+
+  // 普通の声を想定して 100〜2000 Hz を 赤(0°)〜紫(280°) に対応させる
+  let hue = map(centroid, 100, 2000, 0, 280, true);
 
   // 画面全体をその色で塗る
   fill(hue, 100, bright);
   rect(0, 0, width, height);
 
-  // 文字情報（デバッグ用）
+  // 文字情報（デバッグ）
   fill(0, 0, 100);
-  text("音量(vol): " + vol.toFixed(3), 10, 25);
-  text("推定周波数(freq): " + Math.round(centroid) + " Hz", 10, 50);
-  text("色相(H): " + Math.round(hue) + "°, 明るさ(B): " + Math.round(bright), 10, 75);
+  text("音量(vol): " + vol.toFixed(3), 10, 10);
+  text("推定周波数(freq): " + Math.round(centroid) + " Hz", 10, 30);
+  text("色相(H): " + Math.round(hue) + "°, 明るさ(B): " + Math.round(bright), 10, 50);
 
   text("大きな声 → 明るく", 10, height - 40);
-  text("高い声 → 紫寄り / 低い声 → 赤寄り", 10, height - 20);
+  text("低い声 → 赤寄り / 高い声 → 紫寄り", 10, height - 20);
 }
 </script>
 </body>
 </html>
+
