@@ -14,7 +14,6 @@ let started = false;
 function setup() {
   createCanvas(500, 300);
   colorMode(HSB, 360, 100, 100);  // H:色相, S:彩度, B:明るさ
-
   textSize(16);
   textAlign(LEFT, TOP);
 }
@@ -29,8 +28,9 @@ function mousePressed() {
     mic = new p5.AudioIn();
     mic.start();        // マイクON
 
-    fft = new p5.FFT();
-    fft.setInput(mic);  // FFTにマイクをつなぐ
+    // FFT(スムージング, 分割数)
+    fft = new p5.FFT(0.8, 1024);
+    fft.setInput(mic);
   }
 }
 
@@ -44,13 +44,64 @@ function draw() {
   }
 
   // ① 音の大きさ（振幅） → 明るさ
-  let vol = mic.getLevel();                 // 0.0〜0.1くらい
-  let bright = map(vol, 0.0, 0.1, 10, 100, true);  // 明るさに変換
+  let vol = mic.getLevel();                 // 0.000〜0.020 くらい
+  let bright = map(vol, 0.000, 0.020, 5, 100, true);
 
   // ② 周波数スペクトルを取得
-  let spectrum = fft.analyze();             // 配列（強さのリスト）
-  let nyquist = sampleRate() / 2;          // ナイキスト周波数（22050Hz）
+  let spectrum = fft.analyze();             // 各周波数の強さ [0〜255]
+  let nyquist = sampleRate() / 2;           // 22050Hz くらい
 
-  // ③ 一番強い周波数（ピーク）を探す
-  let maxIndex = 0;
-  let maxVa
+  // ★ 声の周波数帯だけを見る
+  let minFreq = 150;   // 下限（低めの声）
+  let maxFreq = 1000;  // 上限（かなり高めの声）
+
+  // 周波数 → 配列のインデックスに変換
+  let minIndex = Math.floor(minFreq / nyquist * spectrum.length);
+  let maxIndex = Math.floor(maxFreq / nyquist * spectrum.length);
+  maxIndex = Math.min(maxIndex, spectrum.length - 1);
+
+  let maxIndexFound = -1;
+  let maxValue = 0;
+
+  for (let i = minIndex; i <= maxIndex; i++) {
+    if (spectrum[i] > maxValue) {
+      maxValue = spectrum[i];
+      maxIndexFound = i;
+    }
+  }
+
+  // ③ 周波数 [Hz] に変換（※この時点で150〜1000Hzの間に必ずおさまる）
+  let freq = 0;
+  if (maxIndexFound >= 0 && maxValue > 40) { // 小さすぎる音は無視
+    freq = maxIndexFound * nyquist / spectrum.length;
+  }
+
+  // ④ 周波数 → 色相（Hue）
+  let hue;
+  if (freq === 0) {
+    // ほぼ無音
+    hue = 0;
+    bright = 5;
+  } else {
+    // 200 Hz（低いドあたり）→ 赤(0°)
+    // 800 Hz（高いドあたり）→ 紫(280°)
+    hue = map(freq, 200, 800, 0, 280, true);
+  }
+
+  // 画面全体をその色で塗る
+  fill(hue, 100, bright);
+  rect(0, 0, width, height);
+
+  // デバッグ表示
+  fill(0, 0, 100);
+  text("音量(vol): " + vol.toFixed(3), 10, 10);
+  text("推定周波数(freq): " + Math.round(freq) + " Hz", 10, 30);
+  text("色相(H): " + Math.round(hue) + "°, 明るさ(B): " + Math.round(bright), 10, 50);
+
+  text("大きな声 → 明るく", 10, height - 40);
+  text("低い声 → 赤寄り / 高い声 → 紫寄り", 10, height - 20);
+}
+</script>
+</body>
+</html>
+
