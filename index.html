@@ -47,8 +47,9 @@ function draw() {
   // ① 音の大きさ（振幅）を取得
   let vol = mic.getLevel();   // だいたい 0.0〜0.1 くらい
 
-  // 変化が見えやすいように、少し大げさにマッピング
-  let bright = map(vol, 0, 0.1, 10, 100, true);
+// 200 Hz（ちょい低め）→ 赤
+// 800 Hz（かなり高め）→ 紫
+let hue = map(centroid, 200, 800, 0, 280, true);
 
   // ② 周波数スペクトルを計算
   fft.analyze();              // ★これがないと centroid がうまく出ない
